@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>A Dance of Fire and Ice</title>
 <base href="https://cdn.jsdelivr.net/gh/nawsif/host@main/ADOFAI/">
 <script src="https://tinklehost.github.io/intro.js"></script>
-<title>A Dance of Fire and Ice</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
@@ -39,7 +39,7 @@ button{color:#ffcf65;background:#252525;border:1px solid #d6a538;border-radius:8
 <script>
 "use strict";
 // Build and StreamingAssets must be alongside this page.
-const BUILD="Build/", VERSION="tinkle-routing-6", PARTS={data:9,wasm:7};
+const BUILD="Build/", VERSION="tinkle-routing-5", PARTS={data:9,wasm:7};
 const canvas=document.getElementById("unity-canvas"), loading=document.getElementById("loading"), status=document.getElementById("status"), progress=document.getElementById("tinkle-progress"), retry=document.getElementById("retry");
 const objectUrls=[];
 let unityInstance,failed=false,completed=0;
@@ -101,7 +101,7 @@ async function joinParts(name,count,type){
 }
 function loadScript(url){return new Promise((resolve,reject)=>{const script=document.createElement("script");script.src=url;script.onload=resolve;script.onerror=()=>reject(new Error("Could not load "+BUILD+"WebGL.loader.js."));document.body.appendChild(script);});}
 async function start(){
-  if(location.protocol==="file:"&&new URL(document.baseURI).protocol==="file:")throw new Error("Open this game through a web server, such as http://localhost:8000, rather than directly from disk.");
+  if(location.protocol==="file:")throw new Error("Open this game through a web server, such as http://localhost:8000, rather than directly from disk.");
   const [dataUrl,codeUrl]=await Promise.all([
     joinParts("WebGL.data",PARTS.data,"application/octet-stream"),
     joinParts("WebGL.wasm",PARTS.wasm,"application/wasm"),
@@ -110,7 +110,7 @@ async function start(){
   status.textContent="Starting game…";
   unityInstance=await createUnityInstance(canvas,{
     dataUrl,codeUrl,frameworkUrl:BUILD+"WebGL.framework.js?v="+VERSION,
-    streamingAssetsUrl:new URL("StreamingAssets/",document.baseURI).href,companyName:"7th Beat Games",productName:"A Dance of Fire and Ice",productVersion:"2.0.3",
+    streamingAssetsUrl:"StreamingAssets",companyName:"7th Beat Games",productName:"A Dance of Fire and Ice",productVersion:"2.0.3",
     matchWebGLToCanvasSize:true,
     showBanner(message,type){if(type==="error")fail(message);else console.warn(message);}
   },value=>{if(!failed)setProgress(.75+value*.25);});
