@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#414141">
+  <title>Hill Climb Racing | Tinkle Games</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <script src="https://tinklehost.github.io/intro.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    html,body{margin:0;width:100%;height:100%;height:100dvh;overflow:hidden;background:#414141}
+    #game{position:fixed;inset:0;width:100%;height:100%;display:block;border:0;background:#151515}
+    #tinkle-loader{position:fixed;inset:0;z-index:70;background:#414141;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;text-align:center;color:#f6cb68;transition:opacity .7s ease,visibility .7s ease;font-family:'Orbitron',Arial,sans-serif}
+    #tinkle-loader.fading{opacity:0;visibility:hidden;pointer-events:none}
+    .tinkle-diamond{width:48px;height:48px;border:3px solid #efbd47;transform:rotate(45deg);box-shadow:0 0 18px #dca12877;animation:diamond-pulse 1.5s ease-in-out infinite;margin:0 0 12px}
+    @keyframes diamond-pulse{0%,100%{opacity:.55;scale:.9}50%{opacity:1;scale:1.1}}
+    .tinkle-track{width:min(365px,80vw);height:10px;border:1px solid #d6a538;background:#252525;border-radius:15px;overflow:hidden;margin-top:8px}
+    #tinkle-progress{height:100%;width:0;background:linear-gradient(90deg,#b67a19,#ffdf70);transition:width .17s linear;box-shadow:0 0 12px #ffdc6d}
+    #tinkle-percent{font-size:15px;letter-spacing:.15em;color:#ffcf65}
+    #tinkle-status{font-family:Arial,sans-serif;font-size:13px;color:#dedede;max-width:85vw;overflow-wrap:anywhere}
+    #retry-button{display:none;border:1px solid #d6a538;border-radius:4px;background:#352a18;color:#ffdc6d;font:700 14px Arial,sans-serif;padding:11px 24px;cursor:pointer}
+    @media(prefers-reduced-motion:reduce){.tinkle-diamond{animation:none}#tinkle-loader,#tinkle-progress{transition:none}}
+  </style>
+</head>
+<body>
+  <iframe id="game" title="Hill Climb Racing" allow="autoplay; fullscreen" allowfullscreen></iframe>
+  <main id="tinkle-loader" role="status" aria-live="polite">
+    <div class="tinkle-diamond"></div>
+    <div class="tinkle-track" id="progress" role="progressbar" aria-label="Game download" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="tinkle-progress"></div></div>
+    <div id="tinkle-percent">0%</div>
+    <div id="tinkle-status">Preparing game...</div>
+    <button id="retry-button" type="button">RETRY</button>
+  </main>
+  <script>
+    (() => {
+      const BASE = 'https://cdn.jsdelivr.net/gh/NotRexed/HillClimbRacingPort@7467bb544dff9871a1a6dfd15407ecd48bd06bb9/';
+      const parts = {
+        'hcr.wasm': [15221492, 15221492, 15221492, 15221489],
+        'hcr.data': [17201818, 17201818, 17201818, 17201818, 17201818, 17201817],
+        'image.bin': [11042816, 11042816]
+      };
+      const totalBytes = Object.values(parts).flat().reduce((sum, n) => sum + n, 0);
+      const downloaded = { 'hcr.wasm': 0, 'hcr.data': 0, 'image.bin': 0 };
+      const $ = id => document.getElementById(id);
+      let running = false;
+      let scriptUrl = null;
+
+      function show(asset, file, loaded) {
+        downloaded[asset] = loaded;
+        const done = Object.values(downloaded).reduce((sum, n) => sum + n, 0);
+        // Reserve the final few percent for initializing the browser game.
+        const percent = Math.min(97, Math.floor(done / totalBytes * 97));
+        $('tinkle-percent').textContent = percent + '%';
+        $('tinkle-progress').style.width = percent + '%';
+        $('progress').setAttribute('aria-valuenow', percent);
+        $('tinkle-status').textContent = 'Downloading ' + file + '...';
+      }
+
+      async function download(name, expectedSize, onChunk) {
+        const response = await fetch(BASE + name);
+        if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
+        if (!response.body) throw new Error(`${name}: streaming download is unavailable`);
+        const reader = response.body.getReader();
+        let size = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (expectedSize !== null && size + value.length > expectedSize) throw new Error(`${name}: file is larger than expected`);
+          onChunk(value, size);
+          size += value.length;
+        }
+        if (expectedSize !== null && size !== expectedSize) throw new Error(`${name}: expected ${expectedSize} bytes, received ${size}`);
+      }
+
+      async function downloadText(name) {
+        const decoder = new TextDecoder();
+        let text = '';
+        await download(name, null, chunk => { text += decoder.decode(chunk, { stream:true }); });
+        return text + decoder.decode();
+      }
+
+      async function downloadAsset(name) {
+        const sizes = parts[name];
+        const total = sizes.reduce((a, n) => a + n, 0);
+        const bytes = new Uint8Array(total);
+        let offset = 0;
+        for (let i = 0; i < sizes.length; i++) {
+          const file = `${name}.part${i + 1}`;
+          show(name, file, offset);
+          await download(file, sizes[i], (chunk, partOffset) => {
+            bytes.set(chunk, offset + partOffset);
+            show(name, file, offset + partOffset + chunk.length);
+          });
+          offset += sizes[i];
+        }
+        show(name, name, total);
+        return new Blob([bytes], { type:name === 'hcr.wasm' ? 'application/wasm' : 'application/octet-stream' });
+      }
+
+      function installBridge() {
+        const assets = parent.__hcrLoaderAssets || {};
+        const originalFetch = window.fetch.bind(window);
+        window.fetch = (input, options) => {
+          const url = input instanceof Request ? input.url : String(input);
+          const name = new URL(url, document.baseURI).pathname.split('/').pop();
+          const blob = assets[name];
+          if (!blob) return originalFetch(input, options);
+          const headers = new Headers(options && options.headers || (input instanceof Request ? input.headers : undefined));
+          const range = /^bytes=(\d+)-(\d*)$/.exec(headers.get('Range') || '');
+          if (range) {
+            const start = Number(range[1]);
+            const end = range[2] ? Math.min(Number(range[2]), blob.size - 1) : blob.size - 1;
+            if (start >= blob.size || end < start) return Promise.resolve(new Response(null, { status:416, headers:{ 'Content-Range':`bytes */${blob.size}` } }));
+            const slice = blob.slice(start, end + 1);
+            return Promise.resolve(new Response(slice, { status:206, headers:{
+              'Content-Type':blob.type, 'Content-Length':String(slice.size),
+              'Content-Range':`bytes ${start}-${end}/${blob.size}`, 'Accept-Ranges':'bytes'
+            } }));
+          }
+          return Promise.resolve(new Response(blob, { status:200, headers:{
+            'Content-Type':blob.type, 'Content-Length':String(blob.size), 'Accept-Ranges':'bytes'
+          } }));
+        };
+      }
+
+      async function start() {
+        if (running) return;
+        running = true;
+        
+        $('retry-button').style.display = 'none';
+        $('tinkle-status').textContent = 'Preparing game...';
+        Object.keys(downloaded).forEach(key => downloaded[key] = 0);
+        $('tinkle-percent').textContent = '0%';
+        $('tinkle-progress').style.width = '0%';
+        $('progress').setAttribute('aria-valuenow', '0');
+        try {
+          if (!('Suspending' in WebAssembly)) throw new Error('This game requires Chrome or Edge 137 or newer.');
+          const [html, script, wasm, data, image] = await Promise.all([
+            downloadText('index.html'), downloadText('hcr.js'),
+            downloadAsset('hcr.wasm'), downloadAsset('hcr.data'), downloadAsset('image.bin')
+          ]);
+          const assets = { 'hcr.wasm':wasm, 'hcr.data':data, 'image.bin':image };
+          const scriptTag = /<script\s+src=["']hcr\.js["']\s*><\/script>/;
+          if (!scriptTag.test(html)) throw new Error('The game page no longer has the expected hcr.js script tag.');
+          window.__hcrLoaderAssets = assets;
+          if (scriptUrl) URL.revokeObjectURL(scriptUrl);
+          scriptUrl = URL.createObjectURL(new Blob([script], { type:'application/javascript' }));
+          const bridgeTag = '<script>(' + installBridge.toString() + ')();</' + 'script>';
+          const replacement = bridgeTag + '<script src="' + scriptUrl + '"></' + 'script>';
+          const page = html.replace(scriptTag, replacement);
+          $('tinkle-status').textContent = 'Starting game...';
+          $('tinkle-percent').textContent = '99%';
+          $('tinkle-progress').style.width = '99%';
+          $('progress').setAttribute('aria-valuenow', '99');
+          $('game').addEventListener('load', () => {
+            $('tinkle-percent').textContent = '100%';
+            $('tinkle-progress').style.width = '100%';
+            $('progress').setAttribute('aria-valuenow', '100');
+            $('tinkle-status').textContent = 'Ready!';
+            $('tinkle-loader').classList.add('fading');
+            setTimeout(() => { $('tinkle-loader').style.display = 'none'; }, 750);
+          }, { once:true });
+          $('game').srcdoc = page;
+        } catch (error) {
+          console.error(error);
+          $('tinkle-status').textContent = 'Loading failed: ' + (error.message || String(error));
+          $('retry-button').style.display = 'block';
+        } finally {
+          running = false;
+        }
+      }
+      $('retry-button').addEventListener('click', start);
+      start();
+    })();
+  </script>
+</body>
+</html>
