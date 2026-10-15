@@ -9,14 +9,17 @@
 <title>Happy Wheels</title>
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}#og-game-holder{width:100%;height:100%}canvas{display:block}#loading{position:fixed;inset:0;background:#111;color:#eee;display:grid;place-content:center;text-align:center;font:16px system-ui;z-index:9999}#loading p{max-width:38em;padding:0 20px;white-space:pre-wrap}#loading.error{background:#241818}h1{font-size:28px}
+progress{width:min(380px,80vw);height:14px;margin:0 auto;accent-color:#d9b45a;border:0;border-radius:8px;overflow:hidden}progress::-webkit-progress-bar{background:#333}progress::-webkit-progress-value{background:linear-gradient(90deg,#ad842f,#f2d68a)}progress::-moz-progress-bar{background:#d9b45a}#loading-percent{margin:10px 0;font-size:14px;color:#e5c777}
 </style>
 </head>
 <body>
 <div id="og-game-holder"></div>
-<div id="loading"><h1>Happy Wheels</h1><p id="status">Loading game assets…</p></div>
+<div id="loading"><h1>Happy Wheels</h1><p id="status">Loading game code…</p><progress id="loading-progress" max="100" value="0" aria-label="Asset loading progress"></progress><div id="loading-percent">0%</div></div>
 <script>
 window.HW_SETTINGS={siteURL:"./",user_id:1,username:"Player",disableUpload:false};
-window.addEventListener('hw-ready',()=>document.getElementById('loading')?.remove());
+function updateLoadingProgress(percent){const value=Math.max(0,Math.min(100,Number(percent)||0));const bar=document.getElementById('loading-progress');if(bar){bar.value=value;document.getElementById('loading-percent').textContent=Math.floor(value)+'%';document.getElementById('status').textContent='Loading game assets…';}}
+window.addEventListener('hw-load-progress',event=>updateLoadingProgress(event.detail?.percent));
+window.addEventListener('hw-ready',()=>{updateLoadingProgress(100);document.getElementById('loading')?.remove();});
 function showFailure(message){const el=document.getElementById('loading');if(el){el.classList.add('error');document.getElementById('status').textContent=message;}}
 window.addEventListener('error',event=>{if(event.target?.tagName==='SCRIPT')showFailure('A game file could not load. Upload the complete dist folder.');else if(event.message)showFailure(event.message);},true);
 window.addEventListener('unhandledrejection',event=>showFailure(String(event.reason?.message||event.reason)));
